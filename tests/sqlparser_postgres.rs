@@ -13518,3 +13518,63 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+const RECURSIVE_GROUPS_CTE: &str = "WITH RECURSIVE r (id, parent_id) AS (SELECT id, parent_id FROM groups WHERE id = 1 UNION ALL SELECT g.id, g.parent_id FROM groups AS g JOIN r ON g.parent_id = r.id)";
+
+/// Asserts that `RECURSIVE_GROUPS_CTE`, each set of clauses and `SELECT id FROM r` fail to parse with the paired error.
+fn assert_recursive_cte_errors(dialects: &TestedDialects, cases: &[(&str, &str)]) {
+    for (clauses, error) in cases {
+        let sql = format!("{RECURSIVE_GROUPS_CTE} {clauses} SELECT id FROM r");
+        let actual = dialects.parse_sql_statements(&sql).unwrap_err().to_string();
+        assert!(
+            actual.starts_with(&format!("sql parser error: {error}")),
+            "{sql}: {actual}"
+        );
+    }
+}
+
+#[test]
+fn parse_cte_search_clause() {
+    for clauses in [
+        "SEARCH BREADTH FIRST BY id SET ordercol",
+        "SEARCH DEPTH FIRST BY id, parent_id SET ordercol",
+        "SEARCH DEPTH FIRST BY id SET ordercol, s AS (SELECT 1)",
+    ] {
+        pg_and_generic().verified_stmt(&format!(
+            "{RECURSIVE_GROUPS_CTE} {clauses} SELECT id FROM r"
+        ));
+    }
+
+    let query = pg().verified_query(&format!(
+        "{RECURSIVE_GROUPS_CTE} SEARCH DEPTH FIRST BY id SET ordercol SELECT id FROM r"
+    ));
+    assert_eq!(
+        query.with.unwrap().cte_tables[0].search,
+        Some(CteSearchClause {
+            order: CteSearchOrder::DepthFirst,
+            columns: vec![Ident::new("id")],
+            sequence_column: Ident::new("ordercol"),
+        })
+    );
+
+    assert_recursive_cte_errors(
+        &pg(),
+        &[
+            (
+                "SEARCH FIRST BY id SET ordercol",
+                "Expected: one of BREADTH or DEPTH, found: FIRST",
+            ),
+            (
+                "SEARCH DEPTH FIRST BY id USING ordercol",
+                "Expected: SET, found: USING",
+            ),
+        ],
+    );
+    assert_recursive_cte_errors(
+        &all_dialects_where(|d| !d.supports_cte_search_clause()),
+        &[(
+            "SEARCH DEPTH FIRST BY id SET ordercol",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: SEARCH",
+        )],
+    );
+}
