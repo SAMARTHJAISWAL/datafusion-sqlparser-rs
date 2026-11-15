@@ -13578,3 +13578,47 @@ fn parse_cte_search_clause() {
         )],
     );
 }
+
+#[test]
+fn parse_cte_cycle_clause() {
+    for clauses in [
+        "CYCLE id SET is_cycle USING path",
+        "CYCLE id, parent_id SET is_cycle USING path",
+        "CYCLE id SET is_cycle USING path, s AS (SELECT 1)",
+        "SEARCH DEPTH FIRST BY id SET ordercol CYCLE id SET is_cycle USING path",
+    ] {
+        pg_and_generic().verified_stmt(&format!(
+            "{RECURSIVE_GROUPS_CTE} {clauses} SELECT id FROM r"
+        ));
+    }
+
+    let query = pg().verified_query(&format!(
+        "{RECURSIVE_GROUPS_CTE} CYCLE id SET is_cycle USING path SELECT id FROM r"
+    ));
+    assert_eq!(
+        query.with.unwrap().cte_tables[0].cycle,
+        Some(CteCycleClause {
+            columns: vec![Ident::new("id")],
+            mark_column: Ident::new("is_cycle"),
+            path_column: Ident::new("path"),
+        })
+    );
+
+    assert_recursive_cte_errors(
+        &pg(),
+        &[
+            ("CYCLE id SET is_cycle", "Expected: USING, found: SELECT"),
+            (
+                "CYCLE id SET is_cycle USING path SEARCH DEPTH FIRST BY id SET ordercol",
+                "Expected: SELECT, VALUES, or a subquery in the query body, found: SEARCH",
+            ),
+        ],
+    );
+    assert_recursive_cte_errors(
+        &all_dialects_where(|d| !d.supports_cte_cycle_clause()),
+        &[(
+            "CYCLE id SET is_cycle USING path",
+            "Expected: SELECT, VALUES, or a subquery in the query body, found: CYCLE",
+        )],
+    );
+}
