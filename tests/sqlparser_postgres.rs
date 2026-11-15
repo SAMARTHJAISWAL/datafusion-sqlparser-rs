@@ -13600,6 +13600,7 @@ fn parse_cte_cycle_clause() {
         Some(CteCycleClause {
             columns: vec![Ident::new("id")],
             mark_column: Ident::new("is_cycle"),
+            mark_values: None,
             path_column: Ident::new("path"),
         })
     );
@@ -13619,6 +13620,37 @@ fn parse_cte_cycle_clause() {
         &[(
             "CYCLE id SET is_cycle USING path",
             "Expected: SELECT, VALUES, or a subquery in the query body, found: CYCLE",
+        )],
+    );
+}
+
+#[test]
+fn parse_cte_cycle_mark_values() {
+    pg_and_generic().verified_stmt(&format!(
+        "{RECURSIVE_GROUPS_CTE} CYCLE id, parent_id SET is_cycle TO true DEFAULT false USING path SELECT id FROM r"
+    ));
+
+    let query = pg().verified_query(&format!(
+        "{RECURSIVE_GROUPS_CTE} CYCLE id SET is_cycle TO 'Y' DEFAULT 'N' USING path SELECT id FROM r"
+    ));
+    assert_eq!(
+        query.with.unwrap().cte_tables[0].cycle,
+        Some(CteCycleClause {
+            columns: vec![Ident::new("id")],
+            mark_column: Ident::new("is_cycle"),
+            mark_values: Some(CteCycleMarkValues {
+                value: Expr::Value(Value::SingleQuotedString("Y".to_string()).with_empty_span()),
+                default: Expr::Value(Value::SingleQuotedString("N".to_string()).with_empty_span()),
+            }),
+            path_column: Ident::new("path"),
+        })
+    );
+
+    assert_recursive_cte_errors(
+        &pg(),
+        &[(
+            "CYCLE id SET is_cycle TO 'Y' USING path",
+            "Expected: DEFAULT, found: USING",
         )],
     );
 }
