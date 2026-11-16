@@ -13518,3 +13518,44 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_select_for_key_lock_strengths() {
+    for (sql, lock_type) in [
+        ("SELECT id FROM t FOR NO KEY UPDATE", LockType::NoKeyUpdate),
+        (
+            "SELECT id FROM t FOR NO KEY UPDATE OF t SKIP LOCKED",
+            LockType::NoKeyUpdate,
+        ),
+        ("SELECT id FROM t FOR KEY SHARE", LockType::KeyShare),
+        (
+            "SELECT id FROM t FOR KEY SHARE OF t NOWAIT",
+            LockType::KeyShare,
+        ),
+    ] {
+        let query = pg_and_generic().verified_query(sql);
+        assert_eq!(query.locks.len(), 1, "{sql}");
+        assert_eq!(query.locks[0].lock_type, lock_type, "{sql}");
+    }
+
+    for (sql, expected) in [
+        (
+            "SELECT id FROM t FOR NO KEY",
+            "Expected: UPDATE, found: EOF",
+        ),
+        (
+            "SELECT id FROM t FOR NO KEY SHARE",
+            "Expected: UPDATE, found: SHARE",
+        ),
+        (
+            "SELECT id FROM t FOR KEY UPDATE",
+            "Expected: SHARE, found: UPDATE",
+        ),
+    ] {
+        assert_eq!(
+            pg_and_generic().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(expected.to_string()),
+            "{sql}"
+        );
+    }
+}
