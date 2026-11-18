@@ -968,6 +968,7 @@ impl Spanned for RefreshMaterializedView {
 /// - [AlterColumnOperation::DropNotNull]
 /// - [AlterColumnOperation::DropDefault]
 /// - [AlterColumnOperation::AddGenerated]
+/// - [AlterColumnOperation::AlterIdentity]
 /// - [AlterColumnOperation::DropIdentity]
 impl Spanned for AlterColumnOperation {
     fn span(&self) -> Span {
@@ -982,6 +983,7 @@ impl Spanned for AlterColumnOperation {
                 had_set: _,
             } => using.as_ref().map_or(Span::empty(), |u| u.span()),
             AlterColumnOperation::AddGenerated { .. }
+            | AlterColumnOperation::AlterIdentity { .. }
             | AlterColumnOperation::DropIdentity { .. } => Span::empty(),
             AlterColumnOperation::GenericOptions { options } => {
                 union_spans(options.iter().map(|option| option.span()))
