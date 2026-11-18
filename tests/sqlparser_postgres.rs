@@ -13518,3 +13518,25 @@ fn parse_case_ending_in_end_keyword_is_not_silently_dropped() {
         ParserError::ParserError("Expected: end of statement, found: END".to_string())
     );
 }
+
+#[test]
+fn parse_alter_table_alter_column_drop_identity() {
+    pg_and_generic().verified_stmt("ALTER TABLE tab ALTER COLUMN id DROP IDENTITY");
+
+    match alter_table_op(
+        pg_and_generic().verified_stmt("ALTER TABLE tab ALTER COLUMN id DROP IDENTITY IF EXISTS"),
+    ) {
+        AlterTableOperation::AlterColumn { column_name, op } => {
+            assert_eq!("id", column_name.to_string());
+            assert_eq!(op, AlterColumnOperation::DropIdentity { if_exists: true });
+        }
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        pg().parse_sql_statements("ALTER TABLE tab ALTER COLUMN id DROP IDENTITY IF")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: IF"
+    );
+}
