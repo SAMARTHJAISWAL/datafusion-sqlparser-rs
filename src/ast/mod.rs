@@ -69,8 +69,8 @@ pub use self::ddl::{
     AlterFunctionOperation, AlterGenericOption, AlterIndexOperation, AlterOperator,
     AlterOperatorClass, AlterOperatorClassOperation, AlterOperatorFamily,
     AlterOperatorFamilyOperation, AlterOperatorOperation, AlterPolicy, AlterPolicyOperation,
-    AlterSchema, AlterSchemaOperation, AlterTable, AlterTableAlgorithm, AlterTableLock,
-    AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
+    AlterSchema, AlterSchemaOperation, AlterSystem, AlterTable, AlterTableAlgorithm,
+    AlterTableLock, AlterTableOperation, AlterTableType, AlterTextSearch, AlterTextSearchOperation,
     AlterTextSearchOption, AlterTrigger, AlterTriggerOperation, AlterType, AlterTypeAddValue,
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
     AlterView, AlterViewOperation, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef,
@@ -3971,6 +3971,11 @@ pub enum Statement {
         operation: AlterRoleOperation,
     },
     /// ```sql
+    /// ALTER SYSTEM
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altersystem.html)
+    AlterSystem(AlterSystem),
+    /// ```sql
     /// ALTER POLICY <NAME> ON <TABLE NAME> [<OPERATION>]
     /// ```
     /// (Postgresql-specific)
@@ -5803,6 +5808,7 @@ impl fmt::Display for Statement {
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")
             }
+            Statement::AlterSystem(alter_system) => write!(f, "{alter_system}"),
             Statement::AlterPolicy(alter_policy) => write!(f, "{alter_policy}"),
             Statement::AlterTrigger(alter_trigger) => write!(f, "{alter_trigger}"),
             Statement::AlterConnector {
@@ -12780,6 +12786,12 @@ impl From<AlterType> for Statement {
 impl From<AlterCollation> for Statement {
     fn from(a: AlterCollation) -> Self {
         Self::AlterCollation(a)
+    }
+}
+
+impl From<AlterSystem> for Statement {
+    fn from(a: AlterSystem) -> Self {
+        Self::AlterSystem(a)
     }
 }
 
